@@ -2,8 +2,6 @@
 
 Kancatura is a business plan application for founders and operators who need one guided workspace for business stages, plan sections, evidence, financial readiness, tasks, documents, and export preparation.
 
-The first screen is now the Founder Studio, not a marketing page or a crammed status dashboard. It keeps the dark Kancatura rail from the reference image (`docs/assets/kancatura.png`), but opens the main canvas into a guided "Build Your Business" lane, readiness signals, staged workflow, evidence coverage, export checkpoints, activity, tasks, documents, and financial review space.
-
 This repository uses React 19, Vite, TypeScript, Tailwind CSS 4, shadcn-style local UI primitives, lucide icons, local Fontsource typography, and a Convex backend scaffold. Convex commands have not been run, so generated Convex files are intentionally absent.
 
 ## Local Setup
