@@ -32,14 +32,28 @@ const defaultPreferences: UserPreferences = {
   lastActiveTab: "dashboard"
 };
 
+const MAX_TEXT_LENGTH = 200;
+
+// Untrusted JSON spread: clamp string fields and whitelist enums instead of trusting storage.
+function asClampedString(value: unknown, fallback: string): string {
+  return typeof value === "string" ? value.slice(0, MAX_TEXT_LENGTH) : fallback;
+}
+
 export function getPreferences(): UserPreferences {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...defaultPreferences };
     const parsed = JSON.parse(raw) as Partial<UserPreferences>;
+    const theme = parsed.theme === "dark" ? "dark" : "light";
+    const density = parsed.sidebarDensity === "compact" ? "compact" : "comfortable";
     return {
       ...defaultPreferences,
       ...parsed,
+      workspaceName: asClampedString(parsed.workspaceName, defaultPreferences.workspaceName),
+      workspaceRole: asClampedString(parsed.workspaceRole, defaultPreferences.workspaceRole),
+      theme,
+      sidebarDensity: density,
+      lastActiveTab: asClampedString(parsed.lastActiveTab, defaultPreferences.lastActiveTab),
       exportGuardrails: {
         ...defaultPreferences.exportGuardrails,
         ...(parsed.exportGuardrails ?? {})
@@ -60,7 +74,12 @@ export function setPreferences(updates: Partial<UserPreferences>): UserPreferenc
       ...(updates.exportGuardrails ?? {})
     }
   };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  } catch (err) {
+    // QuotaExceededError and privacy-mode blocks must not kill preference updates.
+    console.warn("Kancatura: could not persist preferences to localStorage", err);
+  }
   window.dispatchEvent(new CustomEvent("kancatura:preferences-change"));
   return next;
 }

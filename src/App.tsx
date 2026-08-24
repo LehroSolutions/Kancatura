@@ -1130,6 +1130,12 @@ function SettingsWorkspace() {
   const handleImportData = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
+    if (file.size > MAX_IMPORT_BYTES) {
+      toast.error("Import failed", { description: "File is too large. Maximum size is 10 MB." });
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
     const text = await file.text();
     try {
       await ws.importData(text);

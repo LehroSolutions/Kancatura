@@ -518,6 +518,13 @@ export async function importData(jsonString: string): Promise<void> {
     throw new Error("No valid workspace data found in the file.");
   }
 
+  const MAX_ITEMS_PER_STORE = 500;
+  for (const name of validStores) {
+    if (data[name].length > MAX_ITEMS_PER_STORE) {
+      throw new Error(`Too many records in "${name}" (max ${MAX_ITEMS_PER_STORE}).`);
+    }
+  }
+
   const db = await getDatabase();
   const tx = db.transaction(validStores, "readwrite");
   for (const name of validStores) {
