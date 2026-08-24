@@ -1539,6 +1539,18 @@ function TaskRow({ task, compact = false }: { task: PlanTask; compact?: boolean 
         {!compact ? <span className="truncate block text-[12px] font-medium text-slate-500 mt-1">{stage.title} - {task.owner}</span> : null}
       </div>
       <time className="shrink-0 text-[11px] font-semibold text-slate-400 whitespace-nowrap ml-2">{task.due}</time>
+      <button
+        type="button"
+        className="shrink-0 ml-1 rounded p-1 text-slate-400 hover:text-red-500 transition-colors"
+        aria-label={`Delete task: ${task.label}`}
+        onClick={async (e) => {
+          e.stopPropagation();
+          await ws.removeTask(task.id);
+          toast("Task deleted", { description: task.label });
+        }}
+      >
+        <X className="size-3.5" />
+      </button>
     </article>
   );
 }
