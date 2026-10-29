@@ -22,9 +22,10 @@ Package manager: **bun** (see `packageManager`). License: Apache-2.0.
 
 ## Verify Contract
 
-`bun run verify` = typecheck + unit tests. Must pass before you report
-success. For UI changes, additionally run `bun run test:browser` when a
-browser is available, and say so in your summary either way.
+`bun run verify` = typecheck + unit tests + production build. Must pass
+before you report success. For UI changes, additionally run
+`bun run test:browser` when a browser is available, and say so in your
+summary either way.
 
 ## Codebase Map
 

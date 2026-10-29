@@ -70,7 +70,7 @@ import {
 } from "@/data/kancatura";
 import { isLocalFirst, appVersion } from "@/lib/runtime";
 import { cn } from "@/lib/utils";
-import { downloadBusinessPlanPdf } from "@/lib/pdf-export";
+import { maxOf, minOf, finiteSeries, boundedList, marginToChartY } from "@/lib/chart-metrics";
 
 type WorkspaceTabId =
   | "dashboard"
@@ -307,6 +307,7 @@ function Topbar({ title, subtitle }: { title: string; subtitle: string }) {
 
   const handleExport = async () => {
     try {
+      const { downloadBusinessPlanPdf } = await import("@/lib/pdf-export");
       await downloadBusinessPlanPdf({
         planSummary: summary,
         sections: ws.sections,
@@ -1026,16 +1027,16 @@ function TasksWorkspace() {
         </DialogHeader>
         <div className="grid gap-3 mt-4">
           <div className="settings-field">
-            <label>Task label</label>
-            <Input placeholder="e.g. Review pricing assumptions" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} />
+            <label htmlFor="task-label">Task label</label>
+            <Input id="task-label" placeholder="e.g. Review pricing assumptions" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} />
           </div>
           <div className="settings-field">
-            <label>Owner</label>
-            <Input placeholder="e.g. Finance" value={newOwner} onChange={(e) => setNewOwner(e.target.value)} />
+            <label htmlFor="task-owner">Owner</label>
+            <Input id="task-owner" placeholder="e.g. Finance" value={newOwner} onChange={(e) => setNewOwner(e.target.value)} />
           </div>
           <div className="settings-field">
-            <label>Due date</label>
-            <Input placeholder="e.g. Jun 15" value={newDue} onChange={(e) => setNewDue(e.target.value)} />
+            <label htmlFor="task-due">Due date</label>
+            <Input id="task-due" placeholder="e.g. Jun 15" value={newDue} onChange={(e) => setNewDue(e.target.value)} />
           </div>
         </div>
         <DialogFooter>
@@ -1090,6 +1091,7 @@ function SettingsWorkspace() {
   };
 
   const handleResetData = async () => {
+    if (!window.confirm("Reset this workspace to defaults? Export a JSON backup first if you want to keep your changes.")) return;
     await ws.resetData();
     toast.success("Data reset", { description: "All workspace data has been restored to defaults." });
   };
@@ -1108,6 +1110,7 @@ function SettingsWorkspace() {
 
   const handleExportPdf = async () => {
     try {
+      const { downloadBusinessPlanPdf } = await import("@/lib/pdf-export");
       await downloadBusinessPlanPdf({
         planSummary: summary,
         sections: ws.sections,
@@ -1136,8 +1139,8 @@ function SettingsWorkspace() {
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
-    const text = await file.text();
     try {
+      const text = await file.text();
       await ws.importData(text);
       toast.success("Data imported", { description: "Your workspace data has been restored from the file." });
     } catch (err) {
@@ -1169,16 +1172,16 @@ function SettingsWorkspace() {
           </CardHeader>
           <CardContent>
             <div className="settings-field">
-              <label>Workspace name</label>
-              <Input value={profileName} onChange={(e) => setProfileName(e.target.value)} />
+              <label htmlFor="profile-name">Workspace name</label>
+              <Input id="profile-name" value={profileName} onChange={(e) => setProfileName(e.target.value)} />
             </div>
             <div className="settings-field">
-              <label>Role</label>
-              <Input value={profileRole} onChange={(e) => setProfileRole(e.target.value)} />
+              <label htmlFor="profile-role">Role</label>
+              <Input id="profile-role" value={profileRole} onChange={(e) => setProfileRole(e.target.value)} />
             </div>
             <div className="settings-field">
-              <label>Market</label>
-              <Input value={market} onChange={(e) => setMarket(e.target.value)} />
+              <label htmlFor="profile-market">Market</label>
+              <Input id="profile-market" value={market} onChange={(e) => setMarket(e.target.value)} />
             </div>
           </CardContent>
         </Card>
@@ -1423,12 +1426,13 @@ function TrendBadge({ metric }: { metric: FinancialMetric }) {
 }
 
 function MiniTrend({ data, tone }: { data: number[]; tone: FinancialMetric["tone"] }) {
-  const min = Math.min(...data);
-  const max = Math.max(...data);
+  const series = finiteSeries(data);
+  const min = minOf(series, 0);
+  const max = maxOf(series, min + 1);
   const range = Math.max(1, max - min);
-  const points = data
+  const points = series
     .map((value, index) => {
-      const x = data.length === 1 ? 65 : (index / (data.length - 1)) * 130;
+      const x = series.length === 1 ? 65 : (index / (series.length - 1)) * 130;
       const y = 43 - ((value - min) / range) * 34;
       return `${x},${y}`;
     })
@@ -1445,13 +1449,12 @@ function MiniTrend({ data, tone }: { data: number[]; tone: FinancialMetric["tone
 
 function RevenueChart() {
   const ws = useWorkspace();
-  const revenueData = ws.revenue;
-  const maxRevenue = Math.max(1, ...revenueData.flatMap((quarter) => [quarter.yearOne, quarter.yearTwo, quarter.yearThree]));
-  const maxMargin = Math.max(1, ...revenueData.map((quarter) => quarter.margin));
+  const revenueData = boundedList(ws.revenue);
+  const maxRevenue = maxOf(revenueData.flatMap((quarter) => [quarter.yearOne, quarter.yearTwo, quarter.yearThree]), 1);
   const marginPoints = revenueData
     .map((quarter, index) => {
-      const x = 86 + index * 122;
-      const y = 202 - (quarter.margin / maxMargin) * 142;
+      const x = 78 + index * 122;
+      const y = marginToChartY(quarter.margin);
       return `${x},${y}`;
     })
     .join(" ");
@@ -1508,7 +1511,7 @@ function RevenueChart() {
           );
         })}
         <polyline points={marginPoints} fill="none" stroke="var(--accent-orange)" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" />
-        {marginPoints.split(" ").map((point) => {
+        {marginPoints === "" ? null : marginPoints.split(" ").map((point) => {
           const [cx, cy] = point.split(",");
           return <circle key={point} cx={cx} cy={cy} r="4" fill="var(--accent-orange)" />;
         })}
@@ -1678,16 +1681,16 @@ function OnboardingDialog({ onClose }: { onClose: () => void }) {
           <div className="onboarding-body">
             <p className="text-sm text-[var(--muted-foreground)] mb-3">Tell us about your business to personalize the workspace.</p>
             <div className="settings-field">
-              <label>Business or project name</label>
-              <Input placeholder="e.g. My Startup" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+              <label htmlFor="onboarding-profile-name">Business or project name</label>
+              <Input id="onboarding-profile-name" placeholder="e.g. My Startup" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
             </div>
             <div className="settings-field">
-              <label>Your role</label>
-              <Input placeholder="e.g. Founder, CEO, Consultant" value={role} onChange={(e) => setRole(e.target.value)} />
+              <label htmlFor="onboarding-profile-role">Your role</label>
+              <Input id="onboarding-profile-role" placeholder="e.g. Founder, CEO, Consultant" value={role} onChange={(e) => setRole(e.target.value)} />
             </div>
             <div className="settings-field">
-              <label>Target market</label>
-              <Input placeholder="e.g. South African retail SMBs" value={market} onChange={(e) => setMarket(e.target.value)} />
+              <label htmlFor="onboarding-profile-market">Target market</label>
+              <Input id="onboarding-profile-market" placeholder="e.g. South African retail SMBs" value={market} onChange={(e) => setMarket(e.target.value)} />
             </div>
           </div>
         )}

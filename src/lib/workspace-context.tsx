@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import type { LucideIcon } from "lucide-react";
-import * as LucideIcons from "lucide-react";
+import { resolveIcon } from "@/lib/icons";
+import { Button } from "@/components/ui/button";
 import type { ReactNode } from "react";
 
 import type {
@@ -54,6 +54,8 @@ import {
   exportAllData as storeExport,
   importData as storeImport
 } from "@/lib/store";
+
+import { computeStudioSignals } from "@/lib/studio-signals";
 
 import {
   getPreferences,
@@ -124,11 +126,6 @@ const WorkspaceContext = createContext<WorkspaceContextType | null>(null);
 
 // ── Icon resolution ──────────────────────────────────────────────
 
-function resolveIcon(iconName: string): LucideIcon {
-  const icons = LucideIcons as unknown as Record<string, LucideIcon>;
-  return icons[iconName] ?? LucideIcons.Target;
-}
-
 function resolveIconsInStages(stages: Array<Omit<BusinessStage, "icon"> & { iconName?: string }>): BusinessStage[] {
   return stages.map(({ iconName, ...rest }) => ({
     ...rest,
@@ -145,26 +142,11 @@ function resolveIconsInHighlights(items: Array<Omit<Highlight, "icon"> & { iconN
 
 // ── Compute signals from data ────────────────────────────────────
 
-function computeSignals(
-  sections: PlanSection[],
-  plan: PlanSummaryData,
-  evidenceCount: number,
-  neededEvidenceCount: number
-): StudioSignal[] {
-  const readyCount = sections.filter((s) => s.status === "complete").length;
-  const startedCount = sections.filter((s) => s.completion > 0).length;
-  return [
-    { label: "Plan completion", value: `${plan.completion}%`, detail: `${readyCount} of ${sections.length} sections complete`, tone: "green" },
-    { label: "Financial readiness", value: `${plan.financialReadiness}%`, detail: startedCount > 0 ? `${startedCount} sections in progress` : "start your financial plan", tone: "amber" },
-    { label: "Evidence coverage", value: `${plan.evidenceCoverage}%`, detail: neededEvidenceCount > 0 ? `${neededEvidenceCount} items needed` : `${evidenceCount} items collected`, tone: "blue" },
-    { label: "Export readiness", value: `${plan.exportReadiness}%`, detail: readyCount === sections.length ? "ready to export" : `${sections.length - readyCount} sections remaining`, tone: "violet" }
-  ];
-}
-
 // ── Provider ─────────────────────────────────────────────────────
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [isFirstRun, setIsFirstRun] = useState(false);
   const [planSummary, setPlanSummary] = useState<PlanSummaryData>(seedSummary);
   const [sections, setSections] = useState<PlanSection[]>([]);
@@ -229,26 +211,37 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setTasks(tasksData);
       setDocuments(documentsData);
       setNotes(notesData);
+      setLoadError(false);
     } catch (err) {
       console.error("Failed to load workspace data:", err);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Initialize database and load data
-  useEffect(() => {
-    if (initRef.current) return;
-    initRef.current = true;
-
-    (async () => {
+  const initializeWorkspace = useCallback(async () => {
+    setLoading(true);
+    setLoadError(false);
+    try {
       await getDatabase();
       const isNew = await isNewWorkspace();
       setIsFirstRun(isNew);
       await seedDatabase();
       await loadAll();
-    })();
+    } catch (error) {
+      console.error("Workspace storage is unavailable:", error);
+      setLoadError(true);
+      setLoading(false);
+    }
   }, [loadAll]);
+
+  // Initialize database and load data
+  useEffect(() => {
+    if (initRef.current) return;
+    initRef.current = true;
+    void initializeWorkspace();
+  }, [initializeWorkspace]);
 
   // Listen for data changes
   useEffect(() => {
@@ -266,7 +259,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const signals = useMemo(() => {
     const neededEvidence = evidence.filter((e) => e.status === "needed").length;
-    return computeSignals(sections, planSummary, evidence.length, neededEvidence);
+    return computeStudioSignals(sections, planSummary, evidence.length, neededEvidence);
   }, [sections, planSummary, evidence]);
 
   // ── Actions ──────────────────────────────────────────────────
@@ -374,6 +367,18 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     updateSectionAction, updateStageAction, updateProfile, updatePreferencesAction,
     completeOnboarding, resetData, exportData, importDataAction, getStageById
   ]);
+
+  if (loadError) {
+    return (
+      <main className="min-h-screen grid place-items-center p-6" role="alert">
+        <div className="max-w-lg grid gap-4">
+          <h1 className="text-xl font-bold">Workspace storage is unavailable</h1>
+          <p>Allow this site to store data in your browser, then try again. Your saved workspace has not been reset.</p>
+          <Button onClick={() => void initializeWorkspace()}>Retry loading workspace</Button>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <WorkspaceContext value={value}>

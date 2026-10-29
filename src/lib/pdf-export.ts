@@ -484,7 +484,8 @@ class PdfBuilder {
         this.ensureSpace(8);
         this.doc.setFontSize(9);
         this.doc.setTextColor(...COLORS.brandLight);
-        this.doc.text("\u2022", MARGIN + 2, this.y);
+        this.doc.setFillColor(...COLORS.body);
+        this.doc.circle(MARGIN + 3, this.y - 1, 0.5, "F");
         this.doc.setTextColor(...COLORS.body);
         const noteLines = this.doc.splitTextToSize(note, CONTENT_W - 10);
         this.doc.text(noteLines, MARGIN + 8, this.y);
@@ -614,7 +615,7 @@ class PdfBuilder {
         this.doc.setFontSize(8);
         this.doc.setFont("helvetica", "normal");
         this.doc.setTextColor(...COLORS.muted);
-        this.doc.text(`${item.source} — ${item.detail}`, MARGIN + 4, this.y + 10);
+        this.doc.text(`${item.source} - ${item.detail}`, MARGIN + 4, this.y + 10);
         this.y += 16;
       }
     } else {
@@ -654,7 +655,7 @@ class PdfBuilder {
         this.doc.setFontSize(8);
         this.doc.setFont("helvetica", "normal");
         this.doc.setTextColor(...COLORS.muted);
-        this.doc.text(`${blocker.owner} — ${blocker.action}`, MARGIN + 4, this.y + 10);
+        this.doc.text(`${blocker.owner} - ${blocker.action}`, MARGIN + 4, this.y + 10);
         this.y += 16;
       }
     } else {
@@ -697,7 +698,6 @@ class PdfBuilder {
 
       for (const task of data.tasks) {
         this.ensureSpace(8);
-        const check = task.complete ? "\u2611" : "\u2610";
         this.doc.setFontSize(10);
         this.doc.setFont("helvetica", "normal");
         if (task.complete) {
@@ -705,10 +705,17 @@ class PdfBuilder {
         } else {
           this.doc.setTextColor(...COLORS.body);
         }
-        this.doc.text(`${check}  ${task.label}`, MARGIN + 2, this.y);
+        this.doc.setDrawColor(...COLORS.muted);
+        this.doc.setLineWidth(0.25);
+        this.doc.rect(MARGIN + 2, this.y - 2.7, 3, 3);
+        if (task.complete) {
+          this.doc.line(MARGIN + 2.5, this.y - 1.2, MARGIN + 3.2, this.y - 0.5);
+          this.doc.line(MARGIN + 3.2, this.y - 0.5, MARGIN + 4.5, this.y - 2.2);
+        }
+        this.doc.text(task.label, MARGIN + 7, this.y);
         this.doc.setFontSize(8);
         this.doc.setTextColor(...COLORS.muted);
-        this.doc.text(`${task.owner} — Due: ${task.due}`, MARGIN + 12, this.y + 4);
+        this.doc.text(`${task.owner} - Due: ${task.due}`, MARGIN + 12, this.y + 4);
         this.y += 9;
       }
     }
@@ -736,7 +743,7 @@ class PdfBuilder {
         this.doc.setFontSize(8);
         this.doc.setFont("helvetica", "normal");
         this.doc.setTextColor(...COLORS.muted);
-        this.doc.text(`${doc.status} — Updated: ${doc.updatedAt}`, MARGIN + 2, this.y + 5);
+        this.doc.text(`${doc.status} - Updated: ${doc.updatedAt}`, MARGIN + 2, this.y + 5);
         this.y += 10;
       }
     }

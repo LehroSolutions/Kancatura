@@ -27,6 +27,12 @@ import {
   type WorkspaceNote
 } from "@/data/kancatura";
 
+import {
+  parseWorkspaceImport,
+  WORKSPACE_STORES,
+  type StoreName as ImportStoreName
+} from "@/lib/import-validation";
+
 // ── Database schema ──────────────────────────────────────────────
 
 interface KancaturaDB extends DBSchema {
@@ -106,21 +112,6 @@ interface KancaturaDB extends DBSchema {
 
 // ── Icon name mapping (icons can't be stored in IndexedDB) ───────
 
-const iconNames: Record<string, string> = {
-  BriefcaseBusiness: "BriefcaseBusiness",
-  UsersRound: "UsersRound",
-  ClipboardCheck: "ClipboardCheck",
-  WalletCards: "WalletCards",
-  Megaphone: "Megaphone",
-  FileCheck2: "FileCheck2",
-  Target: "Target",
-  BarChart3: "BarChart3",
-  CircleDollarSign: "CircleDollarSign",
-  ShieldCheck: "ShieldCheck",
-  Headphones: "Headphones",
-  Rocket: "Rocket"
-};
-
 function getIconName(icon: { name?: string } | object): string {
   const iconObj = icon as { name?: string; displayName?: string };
   return iconObj.name ?? iconObj.displayName ?? "Target";
@@ -181,6 +172,9 @@ export function getDatabase(): Promise<IDBPDatabase<KancaturaDB>> {
         // Workspace notes
         db.createObjectStore("workspaceNotes", { keyPath: "title" });
       }
+    }).catch((error: unknown) => {
+      dbPromise = null;
+      throw error;
     });
   }
   return dbPromise;
@@ -461,17 +455,9 @@ export async function updatePlanSummary(
   dispatchChange();
 }
 
-type StoreName = "plan" | "planSections" | "businessStages" | "readinessBlockers" |
-  "evidenceItems" | "studioActivity" | "exportCheckpoints" |
-  "highlights" | "financialMetrics" | "revenueProjection" |
-  "planTasks" | "planDocuments" | "workspaceNotes";
+type StoreName = ImportStoreName;
 
-const ALL_STORES: StoreName[] = [
-  "plan", "planSections", "businessStages", "readinessBlockers",
-  "evidenceItems", "studioActivity", "exportCheckpoints",
-  "highlights", "financialMetrics", "revenueProjection",
-  "planTasks", "planDocuments", "workspaceNotes"
-];
+const ALL_STORES: StoreName[] = WORKSPACE_STORES;
 
 export async function resetDatabase(): Promise<void> {
   const db = await getDatabase();
@@ -486,9 +472,11 @@ export async function resetDatabase(): Promise<void> {
 export async function exportAllData(): Promise<string> {
   const db = await getDatabase();
   const data: Record<string, unknown[]> = {};
-  for (const name of ALL_STORES) {
-    data[name] = await db.getAll(name);
-  }
+  const tx = db.transaction(ALL_STORES, "readonly");
+  await Promise.all(ALL_STORES.map(async (name) => {
+    data[name] = await tx.objectStore(name).getAll();
+  }));
+  await tx.done;
   return JSON.stringify(data, null, 2);
 }
 
@@ -499,37 +487,17 @@ export async function isNewWorkspace(): Promise<boolean> {
 }
 
 export async function importData(jsonString: string): Promise<void> {
-  let data: Record<string, unknown[]>;
-  try {
-    data = JSON.parse(jsonString) as Record<string, unknown[]>;
-  } catch {
-    throw new Error("Invalid JSON format. Please check the file and try again.");
-  }
-
-  if (typeof data !== "object" || data === null || Array.isArray(data)) {
-    throw new Error("Invalid data format. Expected a workspace export file.");
-  }
-
-  const validStores = Object.keys(data).filter(
-    (k): k is StoreName => ALL_STORES.includes(k as StoreName) && Array.isArray(data[k])
-  );
-
-  if (validStores.length === 0) {
+  const { records, storeCount } = parseWorkspaceImport(jsonString);
+  if (storeCount === 0) {
     throw new Error("No valid workspace data found in the file.");
   }
 
-  const MAX_ITEMS_PER_STORE = 500;
-  for (const name of validStores) {
-    if (data[name].length > MAX_ITEMS_PER_STORE) {
-      throw new Error(`Too many records in "${name}" (max ${MAX_ITEMS_PER_STORE}).`);
-    }
-  }
-
+  const validStores = Object.keys(records) as StoreName[];
   const db = await getDatabase();
   const tx = db.transaction(validStores, "readwrite");
   for (const name of validStores) {
     await tx.objectStore(name).clear();
-    for (const item of data[name]) {
+    for (const item of records[name] ?? []) {
       await tx.objectStore(name).put(item as never);
     }
   }

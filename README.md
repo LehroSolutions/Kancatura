@@ -1,50 +1,37 @@
 # Kancatura
 
-Kancatura is a business plan application for founders and operators who need one guided workspace for business stages, plan sections, evidence, financial readiness, tasks, documents, and export preparation.
+A local business-planning workspace for plan sections, evidence, financial readiness, tasks, and PDF/JSON export. React 19, Vite, TypeScript, Tailwind 4 and IndexedDB power the application. The Convex directory is an unconnected scaffold; no cloud account or environment variable is required to use the workspace.
 
-This repository uses React 19, Vite, TypeScript, Tailwind CSS 4, shadcn-style local UI primitives, lucide icons, local Fontsource typography, and a Convex backend scaffold. Convex commands have not been run, so generated Convex files are intentionally absent.
+## Setup and verification
 
-## Local Setup
-
-```powershell
-npm install
-npm run dev
-```
-
-Optional environment:
+Use Node 24+ and Bun 1.3.14 from `packageManager`.
 
 ```powershell
-$env:VITE_CONVEX_URL="https://your-convex-deployment.convex.cloud"
+bun install --frozen-lockfile
+bun run dev
 ```
 
-The app runs in demo mode when `VITE_CONVEX_URL` is missing. Run Convex setup/codegen only when you are ready to connect a deployment. This implementation does not import generated Convex API files from the frontend yet.
-
-## Verification
+Before a release:
 
 ```powershell
-npm test
-npm run build
-npm run test:browser
+bun run verify
+bunx playwright install chromium
+$env:PLAYWRIGHT_CHANNEL = 'chromium'
+bun run test:browser
 ```
 
-- `npm test` runs dependency-light UI contract tests for the tab registry, Founder Studio workflow, Convex scaffold shape, and no generated Convex frontend imports.
-- `npm run build` runs TypeScript and Vite production bundling.
-- `npm run test:browser` starts Vite on an isolated local port, opens Chrome through Playwright, captures `output/playwright/dashboard.png`, and clicks representative tabs to verify the rail is interactive.
+`verify` runs TypeScript, unit tests and a production build. The browser gate serves **dist** and exercises task creation/reload, JSON backup/restore, malformed imports, PDF downloads, unavailable storage, desktop/mobile layout and uncaught errors. Set `KANCATURA_E2E_PORT` if the default 5199 is occupied. Screenshots are generated under `output/playwright`.
 
-## Current Surfaces
+## Data and recovery
 
-- `src/App.tsx`: Kancatura Founder Studio UI, guided stage workflow, responsive workbench composition, and stateful tab panels.
-- `src/components/ui`: local shadcn-style primitives.
-- `src/data/kancatura.ts`: representative demo data for business stages, readiness blockers, evidence, activity, export checkpoints, and plan records that mirror the Convex tables.
-- `tests/ui-contract.test.mjs`: TDD contract checks for the frontend surface.
-- `tests/browser-smoke.mjs`: headless browser smoke for rendering and tab switching.
-- `convex/schema.ts`: schema-first backend scaffold for plan records and Founder Studio workflow tables.
-- `convex/plans.ts`: starter studio/dashboard reads and safe readiness mutations for the later Convex connection.
+Data stays in this browser's IndexedDB at the site's origin. Browser profiles, different hostnames/ports and cleared site data have separate workspaces. The seeded plan is sample material to replace with your own information. This is a planning tool, not an accounting or legal certification service.
 
-## Documentation
+Export JSON from Settings before clearing storage or changing devices. To restore, choose Import JSON in the same workspace; validation rejects malformed records before modifying the database. Exports contain business information in readable JSON: store them somewhere you control. PDF exports are documents, not restorable workspace backups. Reset to Defaults requires confirmation and should follow a backup.
 
-- [Image study](docs/image-study.md)
-- [ADR index](docs/ADR.md)
-- [Architecture decision record](docs/adr/0001-kancatura-react19-shadcn-convex.md)
-- [Tech stack](docs/techstack.md)
-- [Dependencies](docs/dependencies.md)
+If storage is disabled or unavailable, the application presents a retry screen without resetting existing records. Re-enable site storage or free disk space, then retry. Do not delete the database to resolve a startup error unless a backup has been verified.
+
+## Release and rollback
+
+Publish the complete `dist` directory to a static HTTPS host, with a fallback to `index.html`. No API service, secret, or Convex deployment is part of this release. Keep deployment origin stable so existing browser data remains available. Serve HTML with revalidation and hashed assets with long-lived caching. Keep the previous build for rollback; replace static assets as one release. This change keeps the IndexedDB schema at version 1.
+
+The repository includes local UI primitives in `src/components/ui`, models in `src/data/kancatura.ts`, and import validation/persistence in `src/lib`. Run the existing verification gates after changes. See [architecture](docs/adr/0001-kancatura-react19-shadcn-convex.md) and [design study](docs/image-study.md).
